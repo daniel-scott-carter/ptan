@@ -7,6 +7,17 @@ from gym import spaces
 import cv2
 
 
+class StepReduceEnv(gym.Wrapper):
+    def __init__(self, env=None, noop_max=30):
+        """Simple override step function and return 4 item tuple instead of 5.
+        """
+        super(StepReduceEnv, self).__init__(env)
+
+    def step(self, action):
+        obs, rew, done, truncated, info = self.env.step(action)
+        return (obs, rew, done, info)
+
+
 class NoopResetEnv(gym.Wrapper):
     def __init__(self, env=None, noop_max=30):
         """Sample initial states by taking random number of no-ops on reset.
@@ -30,7 +41,7 @@ class NoopResetEnv(gym.Wrapper):
         assert noops > 0
         obs = None
         for _ in range(noops):
-            obs, _, done, _, _ = self.env.step(0)
+            obs, _, done, _ = self.env.step(0)
             if done:
                 obs = self.env.reset()
         return obs
@@ -48,10 +59,10 @@ class FireResetEnv(gym.Wrapper):
 
     def reset(self):
         self.env.reset()
-        obs, _, done, _, _ = self.env.step(1)
+        obs, _, done, _ = self.env.step(1)
         if done:
             self.env.reset()
-        obs, _, done, _, _ = self.env.step(2)
+        obs, _, done, _ = self.env.step(2)
         if done:
             self.env.reset()
         return obs
@@ -68,7 +79,7 @@ class EpisodicLifeEnv(gym.Wrapper):
         self.was_real_reset = False
 
     def step(self, action):
-        obs, reward, done, info, _ = self.env.step(action)
+        obs, reward, done, info = self.env.step(action)
         self.was_real_done = done
         # check current lives, make loss of life terminal,
         # then update lives to handle bonus lives
@@ -91,7 +102,7 @@ class EpisodicLifeEnv(gym.Wrapper):
             self.was_real_reset = True
         else:
             # no-op step to advance from terminal/lost life state
-            obs, _, _, _, _ = self.env.step(0)
+            obs, _, _, _ = self.env.step(0)
             self.was_real_reset = False
         self.lives = self.env.unwrapped.ale.lives()
         return obs
@@ -109,7 +120,7 @@ class MaxAndSkipEnv(gym.Wrapper):
         total_reward = 0.0
         done = None
         for _ in range(self._skip):
-            obs, reward, done, info, _ = self.env.step(action)
+            obs, reward, done, info = self.env.step(action)
             self._obs_buffer.append(obs)
             total_reward += reward
             if done:
@@ -193,7 +204,7 @@ class FrameStack(gym.Wrapper):
         return self._get_ob()
 
     def step(self, action):
-        ob, reward, done, info, _ = self.env.step(action)
+        ob, reward, done, info = self.env.step(action)
         self.frames.append(ob)
         return self._get_ob(), reward, done, info
 
@@ -226,6 +237,7 @@ class ImageToPyTorch(gym.ObservationWrapper):
 def wrap_dqn(env, stack_frames=4, episodic_life=True, reward_clipping=True):
     """Apply a common set of wrappers for Atari games."""
     #assert 'NoFrameskip' in env.spec.id
+    env = StepReduceEnv(env)
     if episodic_life:
         env = EpisodicLifeEnv(env)
     env = NoopResetEnv(env, noop_max=30)
